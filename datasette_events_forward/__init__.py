@@ -5,6 +5,7 @@ import datetime
 import httpx
 from ulid import ULID
 import json
+import sys
 
 
 CREATE_TABLE_SQL = """
@@ -16,7 +17,8 @@ create table if not exists datasette_events_to_forward (
     database_name text,
     table_name text,
     properties text, -- JSON other properties
-    sent_at text
+    sent_at text,
+    failures integer default 0
 )
 """
 
@@ -38,7 +40,7 @@ async def send_events(datasette):
     rows = list(
         (
             await db.execute(
-                "select * from datasette_events_to_forward where sent_at is null order by id limit {}".format(
+                "select * from datasette_events_to_forward where sent_at is null and failures < 3 order by id limit {}".format(
                     LIMIT + 1
                 )
             )
@@ -80,13 +82,30 @@ async def send_events(datasette):
         if str(response.status_code).startswith("2"):
             # It worked! Mark the rows as sent
             await db.execute_write(
-                "update datasette_events_to_forward set sent_at = ? where id in ({})".format(
+                """
+                update datasette_events_to_forward
+                set sent_at = ? where id in ({})""".format(
                     ",".join(["?"] * len(rows))
                 ),
                 [datetime.datetime.utcnow().isoformat()] + [row["id"] for row in rows],
             )
         else:
             # Schedule a retry task
+            print(
+                "datasette-events-forward: Failed to send events to",
+                api_url,
+                response.status_code,
+                repr(response.text),
+                file=sys.stderr,
+            )
+            await db.execute_write(
+                """
+                update datasette_events_to_forward
+                set failures = failures + 1 where id in ({})""".format(
+                    ",".join(["?"] * len(rows))
+                ),
+                [row["id"] for row in rows],
+            )
             should_run_again = True
     if should_run_again:
         asyncio.create_task(rate_limited_send_events(datasette))
@@ -142,7 +161,10 @@ def track_event(datasette, event):
         placeholders.append("?")
         values.append(json.dumps(properties))
         await db.execute_write(
-            "insert into datasette_events_to_forward (id, event, created, actor_id, database_name, table_name, properties) values ({})".format(
+            """
+            insert into datasette_events_to_forward
+                (id, event, created, actor_id, database_name, table_name, properties)
+            values ({})""".format(
                 ",".join(placeholders)
             ),
             values,
