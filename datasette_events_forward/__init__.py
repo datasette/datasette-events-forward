@@ -124,6 +124,9 @@ async def send_events(datasette):
 
 
 async def rate_limited_send_events(datasette):
+    # I added this sleep for the unit tests, to make sure that the rows
+    # had been inserted before the send_events() function was called
+    await asyncio.sleep(0.05)
     async with rate_limit:
         await send_events(datasette)
 

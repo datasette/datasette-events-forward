@@ -26,7 +26,7 @@ CI = "https://github.com/datasette/datasette-events-forward/actions"
 events_forward = "datasette_events_forward"
 
 [project.optional-dependencies]
-test = ["pytest", "pytest-asyncio"]
+test = ["pytest", "pytest-asyncio", "pytest-httpx", "datasette-test"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "strict"
