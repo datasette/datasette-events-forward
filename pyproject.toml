@@ -1,0 +1,32 @@
+[project]
+name = "datasette-events-forward"
+version = "0.1"
+description = "Forward Datasette events to another instance"
+readme = "README.md"
+authors = [{name = "Simon Willison"}]
+license = {text = "Apache-2.0"}
+classifiers=[
+    "Framework :: Datasette",
+    "License :: OSI Approved :: Apache Software License"
+]
+requires-python = ">=3.8"
+dependencies = [
+    "datasette>=1.0a10",
+    "python-ulid",
+    "aiolimiter"
+]
+
+[project.urls]
+Homepage = "https://github.com/datasette/datasette-events-forward"
+Changelog = "https://github.com/datasette/datasette-events-forward/releases"
+Issues = "https://github.com/datasette/datasette-events-forward/issues"
+CI = "https://github.com/datasette/datasette-events-forward/actions"
+
+[project.entry-points.datasette]
+events_forward = "datasette_events_forward"
+
+[project.optional-dependencies]
+test = ["pytest", "pytest-asyncio"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "strict"
