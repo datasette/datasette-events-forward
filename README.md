@@ -40,7 +40,12 @@ Full list of configuration settings:
 - `api_url`: The URL to send the events to. This should be the write API endpoint of a Datasette instance.
 - `api_token`: The API token to use when sending events. Use `{"$env": "FORWARD_TOKEN"}` to read the token from the `FORWARD_TOKEN` environment variable.
 - `instance`: A string to identify the instance that is sending the events.
-- `batch_limit`, defaults to 10: The number of events to send at once. The Datasette write API has a 100 row limit by default so this should be set to a value less than that.
+
+And to control the rate at which batches of events are sent to the Datasette write API:
+
+- `batch_limit`: The number of events to send in each batch, defaults to 10. The Datasette write API has a 100 row limit by default so this should be set to a value less than that.
+- `max_rate`: The maximum number of deliver HTTP requests to send in the specified time period, defaults to 1.
+- `time_period`: The time period for the rate limiting in seconds, defaults to 10.
 
 ## Development
 

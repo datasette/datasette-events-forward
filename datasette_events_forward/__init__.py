@@ -22,8 +22,10 @@ create table if not exists datasette_events_to_forward (
 )
 """
 
-# Allow 1 every 10s
+# Default is to allow 1 every 10s
 rate_limit = AsyncLimiter(max_rate=1, time_period=10)
+
+DEFAULT_BATCH_LIMIT = 10
 
 
 async def send_events(datasette):
@@ -33,13 +35,13 @@ async def send_events(datasette):
     api_url = config.get("api_url")
     api_token = config.get("api_token")
     # Send this many events at a time
-    batch_limit = config.get("batch_limit") or 10
+    batch_limit = config.get("batch_limit") or DEFAULT_BATCH_LIMIT
     if not api_url:
         return
     rows = list(
         (
             await db.execute(
-                """"
+                """
                 select * from datasette_events_to_forward
                 where sent_at is null and failures < 3
                 order by id limit {}""".format(
@@ -120,6 +122,12 @@ async def rate_limited_send_events(datasette):
 
 @hookimpl
 def startup(datasette):
+    config = datasette.plugin_config("datasette-events-forward") or {}
+    if "max_rate" in config:
+        rate_limit.max_rate = config["max_rate"]
+    if "time_period" in config:
+        rate_limit.time_period = config["time_period"]
+
     async def inner():
         db = datasette.get_internal_database()
         await db.execute_write(CREATE_TABLE_SQL)
