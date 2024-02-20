@@ -23,7 +23,7 @@ create table if not exists datasette_events_to_forward (
 """
 
 # Allow 1 every 10s
-rate_limit = AsyncLimiter(max_rate=1, time_period=3)
+rate_limit = AsyncLimiter(max_rate=1, time_period=10)
 
 
 async def send_events(datasette):
