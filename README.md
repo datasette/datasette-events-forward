@@ -37,9 +37,13 @@ Events are forwarded in batches of up to 10, no more than once every 10 seconds.
 
 Full list of configuration settings:
 
-- `api_url`: The URL to send the events to. This should be the write API endpoint of a Datasette instance.
+- `api_url`: The write API URL of a Datasette instance to forward the events to.
 - `api_token`: The API token to use when sending events. Use `{"$env": "FORWARD_TOKEN"}` to read the token from the `FORWARD_TOKEN` environment variable.
 - `instance`: A string to identify the instance that is sending the events.
+
+The `api_url` can be either a `https://datasette.example.com/data/datasette_events/-/insert` endpoint for inserting rows, or a `https://datasette.example.com/data/-/create` endpoint for creating a table and inserting rows into it. If the table does not yet exist you should use the `/-/create` variant, otherwise use the `/-/insert` variant.
+
+If you use `/-/insert` your API token just needs `insert-row` permissions. For `/-/create` you will need `create-table` permissions as well.
 
 And to control the rate at which batches of events are sent to the Datasette write API:
 

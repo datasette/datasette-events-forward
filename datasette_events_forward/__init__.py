@@ -73,14 +73,22 @@ async def send_events(datasette):
     ]
     # HTTPX async POST that to api_url
     async with httpx.AsyncClient() as client:
-        response = await client.post(
-            api_url,
-            json={
+        # body differs for /-/insert v.s. /-/create
+        if api_url.endswith("/-/insert"):
+            body = {
+                "rows": rows,
+                "ignore": True,
+            }
+        elif api_url.endswith("/-/create"):
+            body = {
                 "table": "datasette_events",
                 "rows": rows,
                 "ignore": True,
                 "pk": "id",
-            },
+            }
+        response = await client.post(
+            api_url,
+            json=body,
             headers={"Authorization": "Bearer {}".format(api_token)},
         )
         if str(response.status_code).startswith("2"):
