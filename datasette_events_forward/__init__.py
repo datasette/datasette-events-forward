@@ -26,6 +26,7 @@ rate_limit = AsyncLimiter(max_rate=1, time_period=3)
 # Send this many events at a time
 LIMIT = 10
 
+
 async def send_events(datasette):
     db = datasette.get_internal_database()
     config = datasette.plugin_config("datasette-events-forward") or {}
@@ -34,7 +35,15 @@ async def send_events(datasette):
     api_token = config.get("api_token")
     if not api_url:
         return
-    rows = list((await db.execute("select * from datasette_events_to_forward where sent_at is null order by id limit {}".format(LIMIT + 1))).rows)
+    rows = list(
+        (
+            await db.execute(
+                "select * from datasette_events_to_forward where sent_at is null order by id limit {}".format(
+                    LIMIT + 1
+                )
+            )
+        ).rows
+    )
     if not rows:
         return
     should_run_again = False
@@ -43,17 +52,31 @@ async def send_events(datasette):
         should_run_again = True
 
     # send the rows to the external service
-    rows = [dict(row, instance=instance) for row in rows]
+    rows = [
+        {
+            "id": row["id"],
+            "instance": instance,
+            "event": row["event"],
+            "created": row["created"],
+            "actor_id": row["actor_id"],
+            "database_name": row["database_name"],
+            "table_name": row["table_name"],
+            "properties": row["properties"],
+        }
+        for row in rows
+    ]
     # HTTPX async POST that to api_url
     async with httpx.AsyncClient() as client:
-        response = await client.post(api_url, json={
-            "table": "datasette_events",
-            "rows": rows,
-            "ignore": True,
-            "pk": "id",
-        }, headers={
-            "Authorization": "Bearer {}".format(api_token)
-        })
+        response = await client.post(
+            api_url,
+            json={
+                "table": "datasette_events",
+                "rows": rows,
+                "ignore": True,
+                "pk": "id",
+            },
+            headers={"Authorization": "Bearer {}".format(api_token)},
+        )
         if str(response.status_code).startswith("2"):
             # It worked! Mark the rows as sent
             await db.execute_write(
