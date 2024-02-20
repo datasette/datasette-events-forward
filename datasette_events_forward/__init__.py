@@ -17,7 +17,6 @@ create table if not exists datasette_events_to_forward (
     database_name text,
     table_name text,
     properties text, -- JSON other properties
-    sent_at text,
     failures integer default 0
 )
 """
@@ -43,7 +42,7 @@ async def send_events(datasette):
             await db.execute(
                 """
                 select * from datasette_events_to_forward
-                where sent_at is null and failures < 3
+                where failures < 3
                 order by id limit {}""".format(
                     batch_limit + 1
                 )
@@ -92,14 +91,14 @@ async def send_events(datasette):
             headers={"Authorization": "Bearer {}".format(api_token)},
         )
         if str(response.status_code).startswith("2"):
-            # It worked! Mark the rows as sent
+            # It worked! Mark the rows as sent by deleting them
             await db.execute_write(
                 """
-                update datasette_events_to_forward
-                set sent_at = ? where id in ({})""".format(
+                delete from datasette_events_to_forward
+                where id in ({})""".format(
                     ",".join(["?"] * len(rows))
                 ),
-                [datetime.datetime.utcnow().isoformat()] + [row["id"] for row in rows],
+                [row["id"] for row in rows],
             )
         else:
             # Schedule a retry task
@@ -119,6 +118,7 @@ async def send_events(datasette):
                 [row["id"] for row in rows],
             )
             should_run_again = True
+
     if should_run_again:
         asyncio.create_task(rate_limited_send_events(datasette))
 

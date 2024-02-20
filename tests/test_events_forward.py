@@ -27,7 +27,7 @@ async def test_events_forward(tmpdir, configured, httpx_mock):
             "datasette-events-forward": {
                 "api_url": "https://example.com/data/-/create" if configured else "",
                 "api_token": "xxx",
-                "rate_limit": 1,
+                "rate_limit": 5,
                 "time_period": 0.2,
             }
         },
@@ -62,14 +62,13 @@ async def test_events_forward(tmpdir, configured, httpx_mock):
     assert to_forward["event"] == "create-table"
     assert to_forward["database_name"] == "data"
     assert to_forward["table_name"] == "hello"
-    assert to_forward["sent_at"] is None
-    # Wait 0.6s to give things time to be delivered
-    await asyncio.sleep(0.6)
-    to_forward2 = dict(
-        (await internal_db.execute("select * from datasette_events_to_forward")).rows[0]
-    )
-    assert to_forward2["event"] == "create-table"
-    assert to_forward2["sent_at"] is not None
+    # Wait 0.3s to give things time to be delivered
+    await asyncio.sleep(0.3)
+    # Table should be empty now
+    to_forward_count = (
+        await internal_db.execute("select count(*) from datasette_events_to_forward")
+    ).rows[0][0]
+    assert to_forward_count == 0
     # And the request should have been caught
     request = httpx_mock.get_request()
     assert request.url == "https://example.com/data/-/create"
