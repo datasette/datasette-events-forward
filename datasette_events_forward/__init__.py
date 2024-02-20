@@ -25,9 +25,6 @@ create table if not exists datasette_events_to_forward (
 # Allow 1 every 10s
 rate_limit = AsyncLimiter(max_rate=1, time_period=3)
 
-# Send this many events at a time
-LIMIT = 10
-
 
 async def send_events(datasette):
     db = datasette.get_internal_database()
@@ -35,6 +32,8 @@ async def send_events(datasette):
     instance = config.get("instance")
     api_url = config.get("api_url")
     api_token = config.get("api_token")
+    # Send this many events at a time
+    batch_limit = config.get("batch_limit") or 10
     if not api_url:
         return
     rows = list(
@@ -44,7 +43,7 @@ async def send_events(datasette):
                 select * from datasette_events_to_forward
                 where sent_at is null and failures < 3
                 order by id limit {}""".format(
-                    LIMIT + 1
+                    batch_limit + 1
                 )
             )
         ).rows
@@ -52,8 +51,8 @@ async def send_events(datasette):
     if not rows:
         return
     should_run_again = False
-    if len(rows) > LIMIT:
-        rows = rows[:LIMIT]
+    if len(rows) > batch_limit:
+        rows = rows[:batch_limit]
         should_run_again = True
 
     # send the rows to the external service
