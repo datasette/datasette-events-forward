@@ -5,6 +5,11 @@ from sqlite_utils import Database
 import pytest
 
 
+@pytest.fixture
+def non_mocked_hosts():
+    return ["localhost"]
+
+
 @pytest.mark.asyncio
 async def test_events_forward(tmpdir, httpx_mock):
     httpx_mock.add_response(url="https://example.com/data/-/create", json={"ok": True})
