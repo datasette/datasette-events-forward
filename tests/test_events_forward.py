@@ -11,8 +11,12 @@ def non_mocked_hosts():
 
 
 @pytest.mark.asyncio
-async def test_events_forward(tmpdir, httpx_mock):
-    httpx_mock.add_response(url="https://example.com/data/-/create", json={"ok": True})
+@pytest.mark.parametrize("configured", (True, False))
+async def test_events_forward(tmpdir, configured, httpx_mock):
+    if configured:
+        httpx_mock.add_response(
+            url="https://example.com/data/-/create", json={"ok": True}
+        )
 
     db_path = str(tmpdir / "data.db")
     db = Database(db_path)
@@ -21,7 +25,7 @@ async def test_events_forward(tmpdir, httpx_mock):
         [db_path],
         plugin_config={
             "datasette-events-forward": {
-                "api_url": "https://example.com/data/-/create",
+                "api_url": "https://example.com/data/-/create" if configured else "",
                 "api_token": "xxx",
                 "rate_limit": 1,
                 "time_period": 0.2,
@@ -40,6 +44,16 @@ async def test_events_forward(tmpdir, httpx_mock):
         headers={"Authorization": "Bearer {}".format(token)},
     )
     assert response.status_code == 201
+    if not configured:
+        # Should NOT have added row to table
+        count = (
+            await internal_db.execute(
+                "select count(*) from datasette_events_to_forward"
+            )
+        ).rows[0][0]
+        assert not count
+        return
+
     # Should have added a row to that table
     to_forward = dict(
         (await internal_db.execute("select * from datasette_events_to_forward")).rows[0]

@@ -149,6 +149,10 @@ def startup(datasette):
 
 @hookimpl
 def track_event(datasette, event):
+    config = datasette.plugin_config("datasette-events-forward") or {}
+    if not config.get("api_url"):
+        return
+
     async def inner():
         db = datasette.get_internal_database()
         properties = event.properties()
