@@ -1,6 +1,6 @@
 [project]
 name = "datasette-events-forward"
-version = "0.1a0"
+version = "0.1a1"
 description = "Forward Datasette events to another instance"
 readme = "README.md"
 authors = [{name = "Simon Willison"}]
