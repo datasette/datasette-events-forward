@@ -40,7 +40,10 @@ async def send_events(datasette):
     rows = list(
         (
             await db.execute(
-                "select * from datasette_events_to_forward where sent_at is null and failures < 3 order by id limit {}".format(
+                """"
+                select * from datasette_events_to_forward
+                where sent_at is null and failures < 3
+                order by id limit {}""".format(
                     LIMIT + 1
                 )
             )
