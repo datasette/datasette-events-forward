@@ -24,6 +24,9 @@ create table if not exists datasette_events_to_forward (
 # Default is to allow 1 every 10s
 rate_limit = AsyncLimiter(max_rate=1, time_period=10)
 
+# Lock to prevent concurrent send_events() calls
+send_events_lock = asyncio.Lock()
+
 DEFAULT_BATCH_LIMIT = 10
 
 
@@ -128,7 +131,8 @@ async def rate_limited_send_events(datasette):
     # had been inserted before the send_events() function was called
     await asyncio.sleep(0.05)
     async with rate_limit:
-        await send_events(datasette)
+        async with send_events_lock:
+            await send_events(datasette)
 
 
 @hookimpl
