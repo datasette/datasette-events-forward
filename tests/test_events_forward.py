@@ -1,5 +1,6 @@
 import asyncio
-from datasette_test import Datasette
+from datasette.app import Datasette
+import httpx
 import json
 from sqlite_utils import Database
 import pytest
@@ -14,8 +15,12 @@ def non_mocked_hosts():
 @pytest.mark.parametrize("configured", (True, False))
 async def test_events_forward(tmpdir, configured, httpx_mock):
     if configured:
-        httpx_mock.add_response(
-            url="https://example.com/data/-/create", json={"ok": True}
+        # Allow multiple POST requests to the same URL
+        def custom_response(request):
+            return httpx.Response(200, json={"ok": True})
+
+        httpx_mock.add_callback(
+            custom_response, url="https://example.com/data/-/create"
         )
 
     db_path = str(tmpdir / "data.db")
@@ -23,12 +28,16 @@ async def test_events_forward(tmpdir, configured, httpx_mock):
     db["foo"].insert({"id": 1}, pk="id")
     datasette = Datasette(
         [db_path],
-        plugin_config={
-            "datasette-events-forward": {
-                "api_url": "https://example.com/data/-/create" if configured else "",
-                "api_token": "xxx",
-                "rate_limit": 5,
-                "time_period": 0.2,
+        config={
+            "plugins": {
+                "datasette-events-forward": {
+                    "api_url": (
+                        "https://example.com/data/-/create" if configured else ""
+                    ),
+                    "api_token": "xxx",
+                    "max_rate": 5,
+                    "time_period": 0.2,
+                }
             }
         },
     )
