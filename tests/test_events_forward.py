@@ -41,6 +41,7 @@ async def test_events_forward(tmpdir, configured, httpx_mock):
             }
         },
     )
+    datasette.root_enabled = True
     await datasette.invoke_startup()
     # Should have created the internal table
     internal_db = datasette.get_internal_database()
