@@ -90,3 +90,59 @@ async def test_events_forward(tmpdir, configured, httpx_mock):
         "create-table",
         "insert-rows",
     }
+
+
+@pytest.mark.asyncio
+async def test_multiple_instances_no_interference(tmpdir):
+    """Test that multiple datasette instances don't share state."""
+    db_path1 = str(tmpdir / "data1.db")
+    db1 = Database(db_path1)
+    db1["foo"].insert({"id": 1}, pk="id")
+
+    db_path2 = str(tmpdir / "data2.db")
+    db2 = Database(db_path2)
+    db2["foo"].insert({"id": 1}, pk="id")
+
+    datasette1 = Datasette(
+        [db_path1],
+        config={
+            "plugins": {
+                "datasette-events-forward": {
+                    "api_url": "https://example.com/data/-/create",
+                    "api_token": "token1",
+                    "max_rate": 10,
+                    "time_period": 0.1,
+                }
+            }
+        },
+    )
+
+    datasette2 = Datasette(
+        [db_path2],
+        config={
+            "plugins": {
+                "datasette-events-forward": {
+                    "api_url": "https://example.com/data/-/create",
+                    "api_token": "token2",
+                    "max_rate": 20,
+                    "time_period": 0.2,
+                }
+            }
+        },
+    )
+
+    # Both should start up without issues
+    await datasette1.invoke_startup()
+    await datasette2.invoke_startup()
+
+    # Verify they have separate state
+    state1 = datasette1._datasette_events_forward_state
+    state2 = datasette2._datasette_events_forward_state
+
+    assert state1["rate_limit"] is not state2["rate_limit"]
+    assert state1["lock"] is not state2["lock"]
+    assert state1["tasks"] is not state2["tasks"]
+
+    # Verify configs were applied separately
+    assert state1["rate_limit"].max_rate == 10
+    assert state2["rate_limit"].max_rate == 20

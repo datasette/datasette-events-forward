@@ -21,13 +21,21 @@ create table if not exists datasette_events_to_forward (
 )
 """
 
-# Default is to allow 1 every 10s
-rate_limit = AsyncLimiter(max_rate=1, time_period=10)
-
-# Lock to prevent concurrent send_events() calls
-send_events_lock = asyncio.Lock()
-
 DEFAULT_BATCH_LIMIT = 10
+
+
+def _get_plugin_state(datasette):
+    """Get or create per-instance plugin state."""
+    if not hasattr(datasette, "_datasette_events_forward_state"):
+        config = datasette.plugin_config("datasette-events-forward") or {}
+        max_rate = config.get("max_rate", 1)
+        time_period = config.get("time_period", 10)
+        datasette._datasette_events_forward_state = {
+            "rate_limit": AsyncLimiter(max_rate=max_rate, time_period=time_period),
+            "lock": asyncio.Lock(),
+            "tasks": set(),
+        }
+    return datasette._datasette_events_forward_state
 
 
 async def send_events(datasette):
@@ -123,30 +131,32 @@ async def send_events(datasette):
             should_run_again = True
 
     if should_run_again:
-        asyncio.create_task(rate_limited_send_events(datasette))
+        state = _get_plugin_state(datasette)
+        task = asyncio.create_task(rate_limited_send_events(datasette))
+        state["tasks"].add(task)
+        task.add_done_callback(state["tasks"].discard)
 
 
 async def rate_limited_send_events(datasette):
     # I added this sleep for the unit tests, to make sure that the rows
     # had been inserted before the send_events() function was called
     await asyncio.sleep(0.05)
-    async with rate_limit:
-        async with send_events_lock:
+    state = _get_plugin_state(datasette)
+    async with state["rate_limit"]:
+        async with state["lock"]:
             await send_events(datasette)
 
 
 @hookimpl
 def startup(datasette):
-    config = datasette.plugin_config("datasette-events-forward") or {}
-    if "max_rate" in config:
-        rate_limit.max_rate = config["max_rate"]
-    if "time_period" in config:
-        rate_limit.time_period = config["time_period"]
-
     async def inner():
+        # Initialize state (this will create it with config if needed)
+        state = _get_plugin_state(datasette)
         db = datasette.get_internal_database()
         await db.execute_write(CREATE_TABLE_SQL)
-        asyncio.create_task(rate_limited_send_events(datasette))
+        task = asyncio.create_task(rate_limited_send_events(datasette))
+        state["tasks"].add(task)
+        task.add_done_callback(state["tasks"].discard)
 
     return inner
 
@@ -198,6 +208,9 @@ def track_event(datasette, event):
             ),
             values,
         )
-        asyncio.create_task(rate_limited_send_events(datasette))
+        state = _get_plugin_state(datasette)
+        task = asyncio.create_task(rate_limited_send_events(datasette))
+        state["tasks"].add(task)
+        task.add_done_callback(state["tasks"].discard)
 
     return inner
